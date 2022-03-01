@@ -17,7 +17,7 @@
 % Este polinomio es de grado 3 y tiene como coeficientes a, b, c, d
 % a es el coeficiente correspondiente a x^0
 % b es el coeficiente correspondiente a x^1 ...
-% De esta manera, el polinomio escrito como cadena es: a*X^0+b*X^1+c*X^2+d*X^3
+% De esta manera, el polinomio escrito como cadena es: dX^3 + cX^2 + bX + d
 %
 
 :- dynamic polynomial/1.
@@ -79,8 +79,8 @@ add([A1|A], [B1|B], C, D):-
 % Resta de dos polinomios: calcula en un polinomio R la resta de los polinomios A y B
 %
 % llama al metodo su() con las listas correspondientes a los polinomios A, B y S
-minus(polynomial(A), polynomial(B), polynomial(R)):-
-	su(A, B, [], R).
+minus(polynomial(A), polynomial(B), polynomial(P)):-
+	su(A, B, [], P).
 %
 % Metodos auxiliares para la resta
 %
@@ -93,9 +93,10 @@ su(A, [], C, D):-
 % Caso corte 2: 
 % Cuando la lista A es vacía, combina las listas C y B en la lista D 
 % Ocurre cuando el polinomio B es de grado mayor 
-% FALTA CAMBIAR DE SIGNO A LOS ELEMENTOS DE B 
+% llama al método cambia para invertir el signo de los elementos de B
 su([], B, C, D):-
-	combina(C, B, D),
+	cambia(B, [], B2),
+	combina(C, B2, D),
 	!.
 % A1: cabeza de la lista actual del polinomio A
 % B1: cabeza de la lista actual del polinomio A
@@ -114,17 +115,16 @@ su([A1|A], [B1|B], C, D):-
 % 1: siendo el grado actual
 % []: lista donde se irán guardando los nuevos coeficientes
 % L: lista donde se guardará el resultado final
-differentiate(polynomial([A1 | A]), polynomial(L)):-
+differentiate(polynomial([_ | A]), polynomial(L)):-
 	deriva(A, 1, [], L).
-
 %
 % Metodos auxiliares para la derivada
 %
 % Caso corte 1: 
 % Cuando  la lista es vacía, iguala el resultado a la lista creada recursivamente
-deriva([], X, S, S):-
+deriva([], _, S, S):-
 	!.
-
+%
 % A1: es el coeficiente del término a derivar
 % A: coeficientes restantes
 % X: grado del coeficiente a derivar
@@ -135,6 +135,7 @@ deriva([A1 | A], X, S, L):-
 	X2 is (X + 1), 
 	combina(S, [D] , L2),
 	deriva(A, X2, L2, L).
+
 
 % Evaluación de un polinomio: Evalúa el polinomio A con el valor X y guarda el resultado en Y
 % 
@@ -172,26 +173,56 @@ mult([A1|A], X, Ea, Da, Sa, Y):-
 % Caso corte: 
 % Cuando el contador D es -1 se asigna el valor de la suma actual 
 % a la variable de retorno Y 
-mult(_, _, _, -1, Sa, Y):-
-	Y is Sa,
+mult(_, _, _, -1, Sa, Sa):-
 	!.
 
-% Métodos auxiliares 
-%
-% Caso corte:
-% 
-combina([], L, L):-
+
+% Multiplicación
+times(polynomial(A), polynomial(B), polynomial(C)):-
+	multiplica(A, B, [], C).
+
+multiplica([], _, C, C):-
 	!.
-% agrega los elementos 
-combina([X|L1], L2, [X|L3]):-
-	combina(L1, L2, L3).
+
+multiplica(_, [], C, C):-
+	!.
+
+multiplica(A, [B1 | B], C, D):-
+	multCoef(A, B1, [] , R),
+	add(R, C, [], Res),
+	multiplica([0 | A], B, Res, D).
+
+multCoef([], _, C, C):-
+	!.
+
+multCoef([A1 | A], Bi, C, R):-
+	D is A1 * Bi,
+	combina(C, [D], Ci),
+	multCoef(A, Bi, Ci, R).
+
+% Composicion
+compose(polynomial([A1 | A]), polynomial(B), polynomial(C)):-
+	composicion([A1 | A], B, C).
+
+composicion([], _, []):-
+	!.
+
+composicion([A1 | A], B, C):-
+	composicion(A, B, Pend),
+	multiplica(B, Pend, [], M),
+	add([A1], M, [], C).
+
 
 % toString: imprime la cadena correspondiente al polinomio A
 %
 % A: lista correspondiente al polinomio 
 % llama al método escribe() en el grado actual 0
 toString(polynomial(A)):-
-	escribe(A, 0),
+	invertir(A, [], [I1|I]),
+	degree(polynomial(A), D),
+	write(I1), write("X"), write("^"), write(D),
+	Ds is D - 1,
+	escribe(I, Ds),
 	!.
 %
 % Métodos auxiliares toString
@@ -203,35 +234,119 @@ escribe([], _):- !.
 % Cuando el exponente es cero, escribe la variable independiente del polinomio
 % A1: cabeza de la lista actual
 % pasa la cola de la lista y el exponente 1 al método escribe()
-escribe([A1|A], 0):-
-	write(A1),
-	escribe(A, 1).
+escribe([A1|_], 0):-
+	A1 > 0,
+	write(" + "), write(A1),
+	escribe([], -1).
+
+escribe([A1|_], 0):-
+	A1 < 0,
+	P is A1 * (-1), write(" - "), write(P),
+	escribe([], -1).
+
+escribe([A1|A], 1):-
+	A1 > 0,
+	write(" + "), write(A1), write("X"),
+	escribe(A, 0).
+
+escribe([A1|A], 1):-
+	A1 < 0,
+	P is A1 * (-1), write(" - "), write(P), write("X"),
+	escribe(A, 0).
+escribe([0|A], Ea):-
+	E is Ea - 1,
+	escribe(A, E).
+%
 % Ea: exponente actual 
 % E: exponente siguiente 
 % Imprime el signo + seguido de el coeficiente A1, multiplicado por X
 % elevado a la potencia del exponente actual 
 % se llama recursivamente con la cola de la lista y el exponente que sigue
 escribe([A1|A], Ea):-
-	write("+"), write(A1), write("*"), write("X"), write("^"), write(Ea),
-	E is Ea + 1,
+	A1 > 0,
+	write(" + "), write(A1), write("X"), write("^"), write(Ea),
+	E is Ea - 1,
+	escribe(A, E).
+
+escribe([A1|A], Ea):-
+	A1 < 0,
+	P is A1 * (-1),
+	write(" - "), write(P), write("*"), write("X"), write("^"), write(Ea),
+	E is Ea - 1,
 	escribe(A, E).
 
 
-% main
+% Métodos auxiliares de las listas 
+%
+% Combina dos listas L1 y L2 en una tercera L3
+combina([], L, L):-
+	!.
+combina([X|L1], L2, [X|L3]):-
+	combina(L1, L2, L3).
+%
+% Invierte una lista [A1|A] y la guarda en C
+invertir([], B, B).
+invertir([A1|A], B, C):- 
+	invertir(A, [A1|B], C).
+% Cambia el signo de los elementos de una lista B y los guarda en C
+cambia([], C, C):-
+	!.
+cambia([B1|B], C, B2):-
+	N is B1 * (-1),
+	combina(C, [N], D),
+	cambia(B, D, B2).
+
+
+
+% Main 
 main():-
+	write("Inteligencia Artificial"), nl,
+	write("Proyecto 1: Polinomios"), nl,
+	write("	- Karen Arteaga Mendoza"), nl,
+	write("	- Manuel Hermida Flores"), nl,
+	nl,
+
+	asserta(polynomial([1, 2, 3, 4])),
+	asserta(polynomial([5, 0, 3])),
+
+	plus(polynomial([1, 2, 3, 4]), polynomial([5, 0, 3]), polynomial(S)),
+	times(polynomial([1, 2, 3, 4]), polynomial([5, 0, 3]), polynomial(T)),
+	compose(polynomial([1, 2, 3, 4]), polynomial([5, 0, 3]), polynomial(C)),
+	minus(polynomial([0]), polynomial([1, 2, 3, 4]), polynomial(M)),
+	evaluate(polynomial([1, 2, 3, 4]), 3, E),
+	differentiate(polynomial([1, 2, 3, 4]), polynomial(D)),
+	differentiate(polynomial(D), polynomial(D2)),
+
+	asserta(polynomial(S)),
+	asserta(polynomial(T)),
+	asserta(polynomial(C)),
+	asserta(polynomial(M)),
+	asserta(polynomial(D)),
+	asserta(polynomial(D2)),
+
+	write("p(x)= "), toString(polynomial([1, 2, 3, 4])), nl,
+	write("q(x)= "), toString(polynomial([5, 0, 3])), nl, 
+	write("p(x) + q(x) = "), toString(polynomial(S)), nl,
+	write("p(x) * q(x) = "), toString(polynomial(T)), nl,
+	write("p(q(x)) = "), toString(polynomial(C)), nl,
+	write("0 - p(x) = "), toString(polynomial(M)), nl,
+	write("p(3) = "), write(E), nl,
+	write("p'(x) = "), toString(polynomial(D)), nl,
+	write("p''(x) = "), toString(polynomial(D2)), nl.
+
+% Instanciar polinomios a la base de conocimientos 
+instancia():-
 	write("para terminar escribe ya"),
 	nl,
 	siguiente(-1, []),
 	!.
-
 % I es el grado del polinomio actual
 % L es la lista de coeficientes del polinomio actual 
 siguiente(I, L):-
-	D is I+1,
+	D is I + 1,
 	write("x^"),
 	write(D),
 	write(": "), read(Ax), agrega(Ax, D, L).
-
 % para el metodo recursivo y agrega el polinomio actual a la base de conocimiento
 agrega(ya, _, P):-
 	asserta(polynomial(P)),
@@ -243,26 +358,11 @@ agrega(Ax, D, L):-
 	write(P), nl,
 	siguiente(D, P).
 
-% Multiplicación
-multiply(polynomial(A), polynomial(B), polynomial(C)):-
-	multiplica(A, B, [], C).
 
-multiplica([], B, C, C):-
-	!.
 
-multiplica(A, [], C, C):-
-	!.
 
-multiplica(A, [B1 | B], C, D):-
-	multCoef(A, B1, [] , R),
-	add(R, C, [], Res),
-	multiplica([0 | A], B, Res, D).
 
-multCoef([], Bi, C, C):-
-	!.
 
-multCoef([A1 | A], Bi, C, R):-
-	D is A1 * Bi,
-	combina(C, [D], Ci),
-	multCoef(A, Bi, Ci, R).
+
+
 
